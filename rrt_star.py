@@ -12,6 +12,7 @@ class RRTStar:
             self.children = []
             self.x_path = None
             self.y_path = None
+            self.theta = None
             self.cost = cost
 
     def __init__(self, start, goal ):
@@ -91,6 +92,7 @@ class RRTStar:
         # parent.children.append()
         new_node.x_path = x_path
         new_node.y_path = y_path
+        new_node.theta = [theta] * len(x_path)
         new_node.cost = parent.cost + dist
 
         return new_node
@@ -133,7 +135,7 @@ class RRTStar:
             y_path.append(y)
             count = count + 1
 
-    	return x_path, y_path
+    	return x_path, y_path, [theta] * len(x_path)
 
     def get_neighbours(self, new_node):
         ngh_indx = []
@@ -149,11 +151,12 @@ class RRTStar:
         for i in ngh_indx:
             dist = self.get_dist(new_node, self.nodes[i])
             if self.nodes[i].cost + dist < new_node.cost:
-                x_path, y_path = self.get_path(self.nodes[i], new_node)
+                x_path, y_path, theta = self.get_path(self.nodes[i], new_node)
                 if x_path == None:
                     continue
                 new_node.x_path = x_path
                 new_node.y_path = y_path
+                new_node.theta = theta
                 new_node.cost = self.nodes[i].cost + dist
                 new_node.parent = self.nodes[i]
                 self.propagate_cost_to_leaves(new_node)
@@ -172,11 +175,12 @@ class RRTStar:
         for i in ngh_indx:
             dist = self.get_dist(new_node, self.nodes[i])
             if new_node.cost + dist < self.nodes[i].cost:
-                x_path, y_path = self.get_path(new_node, self.nodes[i])
+                x_path, y_path, theta = self.get_path(new_node, self.nodes[i])
                 if x_path == None:
                     continue
                 self.nodes[i].x_path = x_path
                 self.nodes[i].y_path = y_path
+                self.nodes[i].theta = theta
                 self.nodes[i].cost = new_node.cost + dist
                 self.nodes[i].parent = new_node
                 new_path_x.append(x_path)
@@ -235,14 +239,15 @@ class RRTStar:
 
     def backtrace(self, cur_node):
         if(cur_node.parent == None):
-            return np.asarray([]), np.asarray([])
+            return np.asarray([]), np.asarray([]), np.asarray([])
 
-        path_x, path_y = self.backtrace(cur_node.parent)
+        path_x, path_y, theta = self.backtrace(cur_node.parent)
 
         path_x = np.hstack((path_x, cur_node.x_path))
         path_y = np.hstack((path_y, cur_node.y_path))
+        theta = np.hstack((theta, cur_node.theta))
 
-        return path_x, path_y
+        return path_x, path_y, theta
 
 def main():
     # starting position (x, y)
@@ -257,7 +262,7 @@ def main():
     res = rrt_star.plan()
 
     # backtrace path 
-    path_x, path_y = rrt_star.backtrace(res)
+    path_x, path_y, theta = rrt_star.backtrace(res)
     path_x = np.asarray(path_x)
 
     plt.plot(path_x, path_y, color = 'r', linewidth = 1.5)

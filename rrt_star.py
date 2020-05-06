@@ -3,6 +3,7 @@ import cv2
 import math
 import random
 import numpy as np
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev, splrep
 
@@ -24,21 +25,29 @@ class RRTStar:
         def pretty_print(self):
             print("x: " + str(self.x))
             print("y: " + str(self.y))
-            print("x_path: " + str(self.x_path))
-            print("y_path: " + str(self.y_path))
+            print("t: " + str(self.t))
 
-    def create_world(self):
+    def aug_world(self):
+        im = cv2.imread('map.png')
+
+        imgray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        ret, thresh = cv2.threshold(imgray, 200, 255, 0)
+        world = thresh
+
+        # kernel = np.ones((int(self.thresh*10), int(self.thresh*10)),np.uint8)
+        # world = cv2.erode(thresh, kernel,iterations = 1)
+
+        return world
+
+    def disp_world(self):
         im = cv2.imread('map.png')
 
         imgray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         ret, thresh = cv2.threshold(imgray, 200, 255, 0)
 
-        kernel = np.ones((3, 3),np.uint8)
-        world = cv2.erode(thresh, kernel,iterations = 1)
+        return thresh
 
-        return world
-
-    def __init__(self, start, goal ):
+    def __init__(self, start, goal, s):
         self.start_node = self.node(start[0], start[1])
         self.goal_node = self.node(goal[0], goal[1])
         self.nodes = [self.start_node]
@@ -50,14 +59,18 @@ class RRTStar:
         self.vel = 2    # robot speed 
         self.r = 0.4826 # robot radius
         self.c = 1      # robot clearance
+        self.s = s + 5
         self.thresh = self.c + self.r
-        self.world = self.create_world()
+        self.world_disp = self.disp_world()
+        self.world = self.aug_world()
+        self.nodes_at_t = {}
+        self.other_traj = []
 
     def check_collision(self, node):
         ret = False
 
-        map_idx_x = int(10*node.x)
-        map_idx_y = 1000-int(10*node.y)
+        # map_idx_x = int(10*node.x)
+        # map_idx_y = 1000-int(10*node.y)
 
         if node.x - self.thresh < self.lower_lim_x:
             ret = True
@@ -68,15 +81,17 @@ class RRTStar:
         elif node.y + self.thresh > self.upper_lim_y:
             ret = True
 
-        if map_idx_x < 0 or map_idx_x >=1000 or map_idx_y < 0 or map_idx_y >= 1000:
-            print(map_idx_x)
-            print(map_idx_y)
-            print("Array index out of bound")
-            return True
-
-        if self.world[map_idx_y][map_idx_x] == 0:
-            # print("Collision Detected!!!!!")
+        if node.x > 40 - self.thresh and node.x < 60 + self.thresh and node.y > 35 - self.thresh and node.y < 65 + self.thresh:
             ret = True
+
+        for traj in self.other_traj:
+            t = node.t
+            if node.t > len(traj)-1:
+                t = len(traj)-1
+
+            if np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2) < self.s:
+                print("Lower than safety distance")
+                ret = True
 
         return ret
 
@@ -152,6 +167,18 @@ class RRTStar:
 
         return new_node
 
+    def add_to_nodes_dict(self, new_node, index):
+        t = new_node.t
+        nodes = self.nodes_at_t.get(t)
+
+        if nodes == None:
+            self.nodes_at_t.update({t:[index]})
+
+        else:
+            nodes.append(index)
+            self.nodes_at_t.update({t:nodes})
+
+
     def get_path(self, parent, child):
         dist = self.get_dist(parent, child)
 
@@ -189,6 +216,11 @@ class RRTStar:
             x_path.append(x)
             y_path.append(y)
             count = count + 1
+
+        if x != child.x:
+            child.x = x
+        if y != child.y:
+            child.y = y
 
         return x_path, y_path, [theta] * len(x_path)
 
@@ -248,8 +280,80 @@ class RRTStar:
 
         return new_path_x, new_path_y
 
+    def backtrace(self, cur_node):
+        if(cur_node.parent == None):
+            return np.asarray([cur_node.x]), np.asarray([cur_node.y]), np.asarray([cur_node.t]), np.asarray([]), np.asarray([]), np.asarray([])
 
-    def plan(self):
+        x, y, t, path_x, path_y, path_theta = self.backtrace(cur_node.parent)
+
+        x_s = np.hstack((x, cur_node.x))
+        y_s = np.hstack((y, cur_node.y))
+        t_s = np.hstack((t, cur_node.t))
+        path_x = np.hstack((path_x, cur_node.x_path))
+        path_y = np.hstack((path_y, cur_node.y_path))
+        path_theta = np.hstack((path_theta, cur_node.theta_path))
+
+        return x_s, y_s, t, path_x, path_y, path_theta
+
+    def smooth_path(self, res, ax, name):
+        t = res.t
+
+        # backtrace path 
+        x_s, y_s, t_s, path_x, path_y, path_theta = self.backtrace(res)
+
+        step = float(1/float(t))
+
+        # Path smoothing
+        tck, u = splprep([x_s, y_s], s=1)
+        u_s = np.arange(0, 1.01, step)
+        new_points = splev(u_s, tck)
+        new_points = np.asarray(new_points)
+
+        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        m = min(len(new_points[0]), len(path_x))
+        for i in range(m-1):
+            dist = np.sqrt((new_points[0][i]-path_x[i])**2 + (new_points[1][i]-path_y[i])**2)
+            print(dist)
+            # if dist  self.s:
+            #     print("Collision detected at: " + str(i))
+            #     col = True
+        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+
+        # Plot both trajectories
+        ax.plot(x_s, y_s, color = 'r', linewidth = 1.5)
+        ax.plot(new_points[0], new_points[1], label="S", color = 'c', linewidth = 1.5)
+
+        plt.savefig("explore.png")
+
+        # save data in txt file
+        out = new_points.T
+        if os.path.exists(name):
+            os.remove(name)
+        f1 = open(name, "a")
+
+        for i in range(len(out)):
+            np.savetxt(f1, out[i], fmt="%s", newline=' ')
+            f1.write("\n")
+
+        # new_points = np.hstack((np.reshape(x_s, (len(x_s),1)), np.reshape(y_s, (len(y_s),1)))).T
+
+        return new_points
+
+    def plot_again(self, ax):
+        count = 0
+        for n in self.nodes:
+            if count == 0:
+                count += 1
+                continue
+            cir_node = plt.Circle((n.x, n.y), 0.2, fill=True, color = 'r')
+            ax.add_patch(cir_node)
+            ax.plot(n.x_path, n.y_path, color = 'g', linewidth = 1)
+
+        for traj in self.other_traj:
+            ax.plot(traj[0], traj[1], color = 'b', linewidth = 1)
+
+
+    def plan(self, name, replan = False):
         if self.check_collision(self.start_node):
             print("Start node inside obstacle")
             exit()
@@ -258,17 +362,24 @@ class RRTStar:
             print("Goal node inside obstacle")
             exit()
 
-        fig = plt.figure()
-        ax = fig.gca()
+        fig, ax = plt.subplots()
+        # ax = fig.gca()
         # ax.axis('equal')
         ax.set_xlim([0,100])
         ax.set_ylim([0,100])
+        # ax.imshow(world, cmap=cm.gray)
 
         cir_start = plt.Circle((self.start_node.x, self.start_node.y), 1, fill=True, color = 'b')
         cir_goal = plt.Circle((self.goal_node.x, self.goal_node.y), 1, fill=True, color = 'b')
 
         ax.add_patch(cir_start)
         ax.add_patch(cir_goal)
+
+        obs = plt.Rectangle((40,35),20,30,fill=True, color='k')
+        ax.add_patch(obs)
+
+        if replan:
+            self.plot_again(ax)
 
         count = 0
         while (True):
@@ -284,16 +395,18 @@ class RRTStar:
                 continue
 
             self.nodes.append(new_node)
+            index = len(self.nodes)-1
+            self.add_to_nodes_dict(new_node, index)
             ngh_indx = self.get_neighbours(new_node)
             self.set_parent(new_node, ngh_indx)
             new_path_x, new_path_y = self.rewire(new_node, ngh_indx)
 
             cir_node = plt.Circle((new_node.x, new_node.y), 0.2, fill=True, color = 'r')
             ax.add_patch(cir_node)
-            plt.plot(new_node.x_path, new_node.y_path, color = 'g', linewidth = 1)
+            ax.plot(new_node.x_path, new_node.y_path, color = 'g', linewidth = 1)
 
             for i in range(len(new_path_x)):
-                plt.plot(new_path_x[i], new_path_y[i], color = 'g', linewidth = 1)
+                ax.plot(new_path_x[i], new_path_y[i], color = 'g', linewidth = 1)
 
             plt.pause(0.01)
 
@@ -303,67 +416,121 @@ class RRTStar:
 
             count = count + 1
             # if count == 5:
-            # 	break
+            #     break
 
-        # plt.show()
+        traj = self.smooth_path(new_node, ax, name)
 
-        return new_node
+        return traj
 
-    def backtrace(self, cur_node):
-        if(cur_node.parent == None):
-            return np.asarray([]), np.asarray([]), np.asarray([])
+    def prune(self, t):
+        indx = np.asarray([])
+        for key in self.nodes_at_t.keys():
+            if key >= t:
+                i = np.asarray(self.nodes_at_t.get(key))
+                indx = np.hstack((indx, i))
 
-        x, y, t = self.backtrace(cur_node.parent)
+        # print(len(self.nodes))
+        # print(len(indx))
 
-        x_s = np.hstack((x, cur_node.x))
-        y_s = np.hstack((y, cur_node.y))
-        t_s = np.hstack((t, cur_node.t))
+        indx = np.asarray(indx, dtype='int')
 
-        return x_s, y_s, t
+        for idx in sorted(indx, reverse=True):
+            del self.nodes[idx]
+
+        # print(len(self.nodes))
+
+    def replan(self, trajs, t):
+        self.other_traj = trajs
+
+        self.prune(t)
+        traj = self.plan("replan.png", replan = True)
+
+        return traj
+
+
 
 def main():
     # starting position (x, y)
-    start = [30, 30]
-    # start_node = node(start[0], start[1])
+    start1 = [35, 30]
+    start2 = [25, 30]
 
     # goal point (x, y)
-    goal = [70, 70]
-    # goal_node = node(goal[0], goal[1])
+    goal1 = [30, 70]
+    goal2 = [30, 70]
 
-    rrt_star = RRTStar(start, goal)
-    res = rrt_star.plan()
+    # safe distance
+    s = 3
 
-    t = res.t
+    rrt_star1 = RRTStar(start1, goal1, s=3)
+    traj1 = rrt_star1.plan("out1.txt")
 
-    # backtrace path 
-    x_s, y_s, t_s = rrt_star.backtrace(res)
+    rrt_star2 = RRTStar(start2, goal2, s=3)
+    traj2 = rrt_star2.plan("out2.txt")
 
-    step = float(1/float(t))
-    # print(step)
+    fig, ax = plt.subplots()
+    ax.set_xlim([0,100])
+    ax.set_ylim([0,100])
+    ax.plot(traj1[0], traj1[1], color = 'b', linewidth = 1)
+    ax.plot(traj2[0], traj2[1], color = 'r', linewidth = 1)
+    plt.savefig("collision.png")
 
-    # Path smoothing
-    tck, u = splprep([x_s, y_s], s=1)
-    u_s = np.arange(0, 1.01, step)
-    new_points = splev(u_s, tck)
-    new_points = np.asarray(new_points)
-    print(new_points.shape)
+    l = min(len(traj1[0]), len(traj2[0]))
+    col = False
 
-    # Plot both trajectories
-    plt.plot(x_s, y_s, color = 'r', linewidth = 1.5)
-    plt.plot(new_points[0], new_points[1], label="S", color = 'c', linewidth = 1.5)
+    for i in range(l):
+        dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
+        print(dist)
+        if dist < s:
+            print("Collision detected at: " + str(i))
+            col = True
+            break
 
-    # save data in txt file
-    out = new_points.T
-    if os.path.exists("out.txt"):
-        os.remove("out.txt")
-    f1 = open("out.txt", "a")
+    if col:
+        new_traj1 = rrt_star1.replan([traj2], i)
+        new_traj2 = rrt_star2.replan([traj1], i)
 
-    for i in range(len(out)):
-        np.savetxt(f1, out[i], fmt="%s", newline=' ')
-        f1.write("\n")
+        pd1 = float(len(new_traj1)-len(traj1)/float(len(traj1)))*100
+        pd2 = float(len(new_traj2)-len(traj2)/float(len(traj2)))*100
+
+        if pd1 < pd2:
+            print("Trajectory 1 changed")
+            traj1 = new_traj1
+        else:
+            print("Trajectory 2 changed")
+            traj2 = new_traj2
+
+    fig2, ax2 = plt.subplots()
+    ax2.set_xlim([0,100])
+    ax2.set_ylim([0,100])
+    
+    L1 = len(traj1[0])
+    cm = plt.get_cmap('plasma')
+    ax2.set_color_cycle([cm(1.*i/(L1-1)) for i in range(L1-1)])
+    for i in range(L1-1):
+        ax2.plot(traj1[0][i:i+2], traj1[1][i:i+2])
+
+
+    L2 = len(traj2[0])
+    cm = plt.get_cmap('plasma')
+    ax2.set_color_cycle([cm(1.*i/(L2-1)) for i in range(L2-1)])
+    for i in range(L2-1):
+        ax2.plot(traj2[0][i:i+2], traj2[1][i:i+2])
+
+    # print(traj1.shape)
+    # print(traj2.shape)
+
+    for i in range(l):
+        dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
+        print(dist)
+        if dist < s:
+            print("Collision detected at: " + str(i))
+            col = True
+
+    plt.savefig("final_path.png")
+
 
     plt.show()
-    plt.pause(15)
+    plt.pause(69)
     plt.close()
 
 if __name__ == "__main__":

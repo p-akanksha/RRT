@@ -1,7 +1,10 @@
+import os
 import math
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+
+plt.ion()
 
 class RRTStar:
     class node:
@@ -25,7 +28,7 @@ class RRTStar:
         return False
 
     def goal_check(self, node):
-        if self.get_dist(node, self.goal_node) < 2:
+        if self.get_dist(node, self.goal_node) < 5:
             return True
 
         return False
@@ -159,14 +162,14 @@ class RRTStar:
                 new_node.theta = theta
                 new_node.cost = self.nodes[i].cost + dist
                 new_node.parent = self.nodes[i]
-                self.propagate_cost_to_leaves(new_node)
+                # self.propagate_cost_to_leaves(new_node)
 
     def propagate_cost_to_leaves(self, parent):
         for node in self.nodes:
             if node.parent == parent:
                 dist = self.get_dist(parent, node)
                 node.cost = parent.cost + dist
-                self.propagate_cost_to_leaves(self.nodes[i])
+                self.propagate_cost_to_leaves(self.node)
 
     def rewire(self, new_node, ngh_indx):
         new_path_x = []
@@ -183,6 +186,7 @@ class RRTStar:
                 self.nodes[i].theta = theta
                 self.nodes[i].cost = new_node.cost + dist
                 self.nodes[i].parent = new_node
+                self.propagate_cost_to_leaves(self.nodes[i])
                 new_path_x.append(x_path)
                 new_path_y.append(y_path)
 
@@ -255,18 +259,34 @@ def main():
     # start_node = node(start[0], start[1])
 
     # goal point (x, y)
-    goal = [90, 90]
+    goal = [70, 70]
     # goal_node = node(goal[0], goal[1])
 
     rrt_star = RRTStar(start, goal)
     res = rrt_star.plan()
 
-    # backtrace path 
+    # backtrace path (angle in radians)
     path_x, path_y, theta = rrt_star.backtrace(res)
-    path_x = np.asarray(path_x)
+    path_x = path_x.reshape((len(path_x), 1))
+    path_y = path_y.reshape((len(path_x), 1))
+    theta = theta.reshape((len(path_x), 1))
+
+    out = np.hstack((path_x, path_y, theta))
+
+    print(out.shape)
+
+    if os.path.exists("out.txt"):
+        os.remove("out.txt")
+    f1 = open("out.txt", "a")
+
+    for i in range(len(out)):
+        np.savetxt(f1, out[i], fmt="%s", newline=' ')
+        f1.write("\n")
 
     plt.plot(path_x, path_y, color = 'r', linewidth = 1.5)
     plt.show()
+    plt.pause(5)
+    plt.close()
 
 if __name__ == "__main__":
     main()

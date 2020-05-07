@@ -9,6 +9,10 @@ from scipy.interpolate import splprep, splev, splrep
 
 plt.ion()
 
+if os.path.exists("checked_nodes.txt"):
+    os.remove("checked_nodes.txt")
+f1222 = open("checked_nodes.txt", "a")
+
 class RRTStar:
     class node:
         def __init__(self, x, y, theta = 0, t=0, cost = 0):
@@ -35,16 +39,18 @@ class RRTStar:
         self.lower_lim_y = 0
         self.upper_lim_x = 100
         self.upper_lim_y = 100 
-        self.neigh_dist = 4
+        self.neigh_dist = 3
         self.vel = 2    # robot speed 
         self.r = 0.4826 # robot radius
         self.c = 1      # robot clearance
-        self.s = s + 5
+        self.s = s
         self.thresh = self.c + self.r
         self.nodes_at_t = {}
         self.other_traj = []
 
     def check_collision(self, node):
+
+        # node.pretty_print()
         ret = False
 
         if node.x - self.thresh < self.lower_lim_x:
@@ -59,21 +65,32 @@ class RRTStar:
         if node.x > 40 - self.thresh and node.x < 60 + self.thresh and node.y > 35 - self.thresh and node.y < 65 + self.thresh:
             ret = True
 
+        time = -1
+        dist = -1
         for traj in self.other_traj:
             t = node.t
             # print("timr: " + str(t))
-            if node.t > len(traj)-1:
-                t = len(traj)-1
+            if node.t > len(traj[0])-1:
+                t = len(traj[0])-1
+
+            dist = np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2)
 
             if np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2) < self.s:
                 print("Lower than safety distance")
                 print(np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2))
                 ret = True
 
+            time = t
+
+
+        xxx = [str(node.x), str(node.y), str(node.t), time, ret, dist]
+        np.savetxt(f1222, xxx, fmt="%s", newline=' ')
+        f1222.write("\n")
+
         return ret
 
     def goal_check(self, node):
-        if self.get_dist(node, self.goal_node) < 5:
+        if self.get_dist(node, self.goal_node) < 6:
             return True
 
         return False
@@ -180,6 +197,8 @@ class RRTStar:
         y = par_y
         dist = 0
 
+        if max_count == 0:
+            return None, None, None
 
         while(count < max_count): 
             dx = 0.1 * math.cos(theta) * self.vel
@@ -233,8 +252,9 @@ class RRTStar:
         print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         for idx, node in enumerate(self.nodes):
             if node.parent == parent:
-                self.deleteAllChildren(node)
                 del self.nodes[idx]
+                self.deleteAllChildren(node)
+                idx = idx-1
 
     def propagate_cost_to_leaves(self, parent):
         for i, node in enumerate(self.nodes):
@@ -244,8 +264,9 @@ class RRTStar:
                 node.t = parent.t + len(node.x_path)
                 if self.check_collision(node):
                     print("XXXXXXXXXXXXNeed to delete childrenXXXXXXXXXXXXXX")
-                    self.deleteAllChildren(node)
                     del self.nodes[i]
+                    self.deleteAllChildren(node)
+                    i = i-1
                 else:
                     self.propagate_cost_to_leaves(self.node)
 
@@ -274,7 +295,7 @@ class RRTStar:
 
     def backtrace(self, cur_node):
         if(cur_node.parent == None):
-            return np.asarray([cur_node.x]), np.asarray([cur_node.y]), np.asarray([cur_node.t]), np.asarray([]), np.asarray([]), np.asarray([])
+            return np.asarray([cur_node.x]), np.asarray([cur_node.y]), np.asarray([cur_node.t]), np.asarray([cur_node.x]), np.asarray([cur_node.x]), np.asarray([])
 
         x, y, t, path_x, path_y, path_theta = self.backtrace(cur_node.parent)
 
@@ -301,9 +322,11 @@ class RRTStar:
         print(t_s)
         print(len(path_x))
         step = float(1/float(t))
+        m = len(x_s)
 
         # Path smoothing
-        tck, u = splprep([x_s, y_s], s=0.1)
+        m = m - math.sqrt(2*m)
+        tck, u = splprep([x_s, y_s], s=m)
         u_s = np.arange(0, 1.01, step)
         new_points = splev(u_s, tck)
         new_points = np.asarray(new_points)
@@ -311,11 +334,12 @@ class RRTStar:
         if(len(self.other_traj) > 0):
             print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
             m = min(len(self.other_traj[0][0]), len(path_x))
-            for i in range(m-1):
-                dist = np.sqrt((self.other_trajg[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
+            for i in range(m-2):
+                dist = np.sqrt((self.other_traj[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
                 print(dist)
-                if dist < self.s:
+                if dist < 10:
                     print("Collision detected at: " + str(i))
+                    print("Coordinates: " + str(path_x[i]) + ", " + str(path_y[i]))
                     col = True
             print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 
@@ -338,7 +362,7 @@ class RRTStar:
             np.savetxt(f1, out[i], fmt="%s", newline=' ')
             f1.write("\n")
 
-        new_points = np.hstack((np.reshape(path_x, (len(path_x),1)), np.reshape(path_y, (len(path_y),1)))).T
+        # new_points = np.hstack((np.reshape(path_x, (len(path_x),1)), np.reshape(path_y, (len(path_y),1)))).T
 
         return new_points
 

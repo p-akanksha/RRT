@@ -27,26 +27,6 @@ class RRTStar:
             print("y: " + str(self.y))
             print("t: " + str(self.t))
 
-    def aug_world(self):
-        im = cv2.imread('map.png')
-
-        imgray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        ret, thresh = cv2.threshold(imgray, 200, 255, 0)
-        world = thresh
-
-        # kernel = np.ones((int(self.thresh*10), int(self.thresh*10)),np.uint8)
-        # world = cv2.erode(thresh, kernel,iterations = 1)
-
-        return world
-
-    def disp_world(self):
-        im = cv2.imread('map.png')
-
-        imgray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        ret, thresh = cv2.threshold(imgray, 200, 255, 0)
-
-        return thresh
-
     def __init__(self, start, goal, s):
         self.start_node = self.node(start[0], start[1])
         self.goal_node = self.node(goal[0], goal[1])
@@ -61,16 +41,11 @@ class RRTStar:
         self.c = 1      # robot clearance
         self.s = s + 5
         self.thresh = self.c + self.r
-        self.world_disp = self.disp_world()
-        self.world = self.aug_world()
         self.nodes_at_t = {}
         self.other_traj = []
 
     def check_collision(self, node):
         ret = False
-
-        # map_idx_x = int(10*node.x)
-        # map_idx_y = 1000-int(10*node.y)
 
         if node.x - self.thresh < self.lower_lim_x:
             ret = True
@@ -86,11 +61,13 @@ class RRTStar:
 
         for traj in self.other_traj:
             t = node.t
+            # print("timr: " + str(t))
             if node.t > len(traj)-1:
                 t = len(traj)-1
 
             if np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2) < self.s:
                 print("Lower than safety distance")
+                print(np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2))
                 ret = True
 
         return ret
@@ -110,7 +87,7 @@ class RRTStar:
         if self.check_collision(new_node):
             return None
 
-        return self.node(x, y)
+        return new_node
 
     def get_dist(self, node1, node2):
         return math.sqrt((node1.x -node2.x)**2 + (node1.y - node2.y)**2)
@@ -130,6 +107,7 @@ class RRTStar:
     def step_ahead(self, parent, dest_node):
         par_x = parent.x
         par_y = parent.y
+        tm = parent.t
 
         dest_x = dest_node.x
         dest_y = dest_node.y
@@ -137,8 +115,8 @@ class RRTStar:
         theta = np.arctan2((dest_y-par_y), (dest_x-par_x))
 
         count = 0
-        x_path = [par_x]
-        y_path = [par_y]
+        x_path = []
+        y_path = []
         x = par_x
         y = par_y
         dist = 0
@@ -151,7 +129,7 @@ class RRTStar:
 
             dist = dist + np.sqrt(dx**2 + dy**2)
             
-            if self.check_collision(self.node(x, y)):
+            if self.check_collision(self.node(x, y, t=tm+count+1)):
                 return None
 
             x_path.append(x)
@@ -164,7 +142,6 @@ class RRTStar:
         new_node.y_path = y_path
         new_node.theta = [theta] * len(x_path)
         new_node.cost = parent.cost + dist
-
         return new_node
 
     def add_to_nodes_dict(self, new_node, index):
@@ -189,6 +166,7 @@ class RRTStar:
 
         par_x = parent.x
         par_y = parent.y
+        t = parent.t
 
         child_x = child.x
         child_y = child.y
@@ -196,11 +174,12 @@ class RRTStar:
         theta = np.arctan2((child_y-par_y), (child_x-par_x))
 
         count = 0
-        x_path = [par_x]
-        y_path = [par_y]
+        x_path = []
+        y_path = []
         x = par_x
         y = par_y
         dist = 0
+
 
         while(count < max_count): 
             dx = 0.1 * math.cos(theta) * self.vel
@@ -210,7 +189,7 @@ class RRTStar:
 
             dist = dist + np.sqrt(dx**2 + dy**2)
             
-            if self.check_collision(self.node(x, y)):
+            if self.check_collision(self.node(x, y, t=t+count+1)):
                 return None, None, None
 
             x_path.append(x)
@@ -229,7 +208,7 @@ class RRTStar:
 
         for i, node in enumerate(self.nodes):
             dist = self.get_dist(new_node, node)
-            if dist <= 4:
+            if dist <= self.neigh_dist:
                 ngh_indx.append(i)
 
         return ngh_indx
@@ -241,7 +220,7 @@ class RRTStar:
                 x_path, y_path, theta_path = self.get_path(self.nodes[i], new_node)
                 if x_path == None:
                     continue
-                new_node.t = self.nodes[i].t + len(x_path) - 1
+                new_node.t = self.nodes[i].t + len(x_path)
                 new_node.x_path = x_path
                 new_node.y_path = y_path
                 new_node.theta = theta_path[0]
@@ -250,12 +229,25 @@ class RRTStar:
                 new_node.parent = self.nodes[i]
                 # self.propagate_cost_to_leaves(new_node)
 
+    def deleteAllChildren(self, parent):
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        for idx, node in enumerate(self.nodes):
+            if node.parent == parent:
+                self.deleteAllChildren(node)
+                del self.nodes[idx]
+
     def propagate_cost_to_leaves(self, parent):
-        for node in self.nodes:
+        for i, node in enumerate(self.nodes):
             if node.parent == parent:
                 dist = self.get_dist(parent, node)
                 node.cost = parent.cost + dist
-                self.propagate_cost_to_leaves(self.node)
+                node.t = parent.t + len(node.x_path)
+                if self.check_collision(node):
+                    print("XXXXXXXXXXXXNeed to delete childrenXXXXXXXXXXXXXX")
+                    self.deleteAllChildren(node)
+                    del self.nodes[i]
+                else:
+                    self.propagate_cost_to_leaves(self.node)
 
     def rewire(self, new_node, ngh_indx):
         new_path_x = []
@@ -267,7 +259,7 @@ class RRTStar:
                 x_path, y_path, theta_path = self.get_path(new_node, self.nodes[i])
                 if x_path == None:
                     continue
-                new_node.t = self.nodes[i].t + len(x_path) - 1
+                self.nodes[i].t = new_node.t + len(x_path)
                 self.nodes[i].x_path = x_path
                 self.nodes[i].y_path = y_path
                 self.nodes[i].theta = theta_path[0]
@@ -293,7 +285,11 @@ class RRTStar:
         path_y = np.hstack((path_y, cur_node.y_path))
         path_theta = np.hstack((path_theta, cur_node.theta_path))
 
-        return x_s, y_s, t, path_x, path_y, path_theta
+        print("path_x len: " + str(len(path_x)))
+        # print("path_y len: " + str(len(path_y)))
+        print("time steps: " + str(t_s[len(t_s)-1]))
+
+        return x_s, y_s, t_s, path_x, path_y, path_theta
 
     def smooth_path(self, res, ax, name):
         t = res.t
@@ -301,23 +297,30 @@ class RRTStar:
         # backtrace path 
         x_s, y_s, t_s, path_x, path_y, path_theta = self.backtrace(res)
 
+        print("Time steps:" )
+        print(t_s)
+        print(len(path_x))
         step = float(1/float(t))
 
         # Path smoothing
-        tck, u = splprep([x_s, y_s], s=1)
+        tck, u = splprep([x_s, y_s], s=0.1)
         u_s = np.arange(0, 1.01, step)
         new_points = splev(u_s, tck)
         new_points = np.asarray(new_points)
 
-        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-        m = min(len(new_points[0]), len(path_x))
-        for i in range(m-1):
-            dist = np.sqrt((new_points[0][i]-path_x[i])**2 + (new_points[1][i]-path_y[i])**2)
-            print(dist)
-            # if dist  self.s:
-            #     print("Collision detected at: " + str(i))
-            #     col = True
-        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        if(len(self.other_traj) > 0):
+            print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            m = min(len(self.other_traj[0][0]), len(path_x))
+            for i in range(m-1):
+                dist = np.sqrt((self.other_trajg[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
+                print(dist)
+                if dist < self.s:
+                    print("Collision detected at: " + str(i))
+                    col = True
+            print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+
+            # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+            # for             
 
         # Plot both trajectories
         ax.plot(x_s, y_s, color = 'r', linewidth = 1.5)
@@ -335,7 +338,7 @@ class RRTStar:
             np.savetxt(f1, out[i], fmt="%s", newline=' ')
             f1.write("\n")
 
-        # new_points = np.hstack((np.reshape(x_s, (len(x_s),1)), np.reshape(y_s, (len(y_s),1)))).T
+        new_points = np.hstack((np.reshape(path_x, (len(path_x),1)), np.reshape(path_y, (len(path_y),1)))).T
 
         return new_points
 
@@ -363,11 +366,8 @@ class RRTStar:
             exit()
 
         fig, ax = plt.subplots()
-        # ax = fig.gca()
-        # ax.axis('equal')
         ax.set_xlim([0,100])
         ax.set_ylim([0,100])
-        # ax.imshow(world, cmap=cm.gray)
 
         cir_start = plt.Circle((self.start_node.x, self.start_node.y), 1, fill=True, color = 'b')
         cir_goal = plt.Circle((self.goal_node.x, self.goal_node.y), 1, fill=True, color = 'b')
@@ -394,12 +394,12 @@ class RRTStar:
             if new_node == None:
                 continue
 
-            self.nodes.append(new_node)
-            index = len(self.nodes)-1
-            self.add_to_nodes_dict(new_node, index)
             ngh_indx = self.get_neighbours(new_node)
             self.set_parent(new_node, ngh_indx)
             new_path_x, new_path_y = self.rewire(new_node, ngh_indx)
+            self.nodes.append(new_node)
+            index = len(self.nodes)-1
+            self.add_to_nodes_dict(new_node, index)
 
             cir_node = plt.Circle((new_node.x, new_node.y), 0.2, fill=True, color = 'r')
             ax.add_patch(cir_node)
@@ -429,21 +429,16 @@ class RRTStar:
                 i = np.asarray(self.nodes_at_t.get(key))
                 indx = np.hstack((indx, i))
 
-        # print(len(self.nodes))
-        # print(len(indx))
-
         indx = np.asarray(indx, dtype='int')
 
         for idx in sorted(indx, reverse=True):
             del self.nodes[idx]
 
-        # print(len(self.nodes))
-
     def replan(self, trajs, t):
         self.other_traj = trajs
 
         self.prune(t)
-        traj = self.plan("replan.png", replan = True)
+        traj = self.plan("replan.txt", replan = True)
 
         return traj
 
@@ -475,26 +470,46 @@ def main():
     plt.savefig("collision.png")
 
     l = min(len(traj1[0]), len(traj2[0]))
+    L = max(len(traj1[0]), len(traj2[0]))
     col = False
+
+    print(len(traj1[0]))
+    print(len(traj2[0]))
 
     for i in range(l):
         dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
-        print(dist)
+        # print(dist)
         if dist < s:
             print("Collision detected at: " + str(i))
             col = True
             break
 
+    if not col:
+        for i in range(l, L):
+            flag = False
+            if len(traj1[0]) == l:
+                flag = True
+            if flag:
+                dist = np.sqrt((traj1[0][l-1]-traj2[0][i])**2 + (traj1[1][l-1]-traj2[1][i])**2)
+            else:
+                dist = np.sqrt((traj1[0][i]-traj2[0][l-1])**2 + (traj1[1][i]-traj2[1][l-1])**2)
+            # print(dist)
+            if dist < s:
+                print("Collision detected at: " + str(i))
+                col = True
+                break
+
     if col:
         new_traj1 = rrt_star1.replan([traj2], i)
         new_traj2 = rrt_star2.replan([traj1], i)
+
+        # print(new_traj1)
 
         pd1 = float(len(new_traj1)-len(traj1)/float(len(traj1)))*100
         pd2 = float(len(new_traj2)-len(traj2)/float(len(traj2)))*100
 
         if pd1 < pd2:
             print("Trajectory 1 changed")
-            traj1 = new_traj1
         else:
             print("Trajectory 2 changed")
             traj2 = new_traj2
@@ -504,33 +519,34 @@ def main():
     ax2.set_ylim([0,100])
     
     L1 = len(traj1[0])
+    L2 = len(traj2[0])
+    L = max(L1, L2)
     cm = plt.get_cmap('plasma')
-    ax2.set_color_cycle([cm(1.*i/(L1-1)) for i in range(L1-1)])
+    ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L1-1)])
     for i in range(L1-1):
         ax2.plot(traj1[0][i:i+2], traj1[1][i:i+2])
-
-
-    L2 = len(traj2[0])
+    
     cm = plt.get_cmap('plasma')
-    ax2.set_color_cycle([cm(1.*i/(L2-1)) for i in range(L2-1)])
+    ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L2-1)])
     for i in range(L2-1):
         ax2.plot(traj2[0][i:i+2], traj2[1][i:i+2])
 
-    # print(traj1.shape)
-    # print(traj2.shape)
-
-    for i in range(l):
-        dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
-        print(dist)
-        if dist < s:
-            print("Collision detected at: " + str(i))
-            col = True
+    if col:
+        print("New trajectory 1 length: " + str(traj1.shape))
+        print("New trajectory 2 length: " + str(traj2.shape))
+        l2 = min(len(traj1[0]), len(traj2[0]))
+        for i in range(l2):
+            dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
+            # print(dist)
+            if dist < s:
+                print("Collision detected at: " + str(i))
+                print(dist)
+                col = True
 
     plt.savefig("final_path.png")
 
-
     plt.show()
-    plt.pause(69)
+    plt.pause(15)
     plt.close()
 
 if __name__ == "__main__":

@@ -9,21 +9,19 @@ from scipy.interpolate import splprep, splev, splrep
 
 plt.ion()
 
-if os.path.exists("checked_nodes.txt"):
-    os.remove("checked_nodes.txt")
-f1222 = open("checked_nodes.txt", "a")
+# if os.path.exists("checked_nodes.txt"):
+#     os.remove("checked_nodes.txt")
+# f1222 = open("checked_nodes.txt", "a")
 
 class RRTStar:
     class node:
-        def __init__(self, x, y, theta = 0, t=0, cost = 0):
+        def __init__(self, x, y, t=0, cost = 0):
             self.x = x
             self.y = y
             self.t = t
-            self.theta = theta
             self.parent = None
             self.x_path = None
             self.y_path = None
-            self.theta_path = None
             self.cost = cost
 
         def pretty_print(self):
@@ -37,12 +35,12 @@ class RRTStar:
         self.nodes = [self.start_node]
         self.lower_lim_x = 0
         self.lower_lim_y = 0
-        self.upper_lim_x = 100
-        self.upper_lim_y = 100 
-        self.neigh_dist = 3
-        self.vel = 2    # robot speed 
-        self.r = 0.4826 # robot radius
-        self.c = 1      # robot clearance
+        self.upper_lim_x = 10
+        self.upper_lim_y = 10 
+        self.neigh_dist = 0.6
+        self.vel = 0.2    # robot speed 
+        self.r = 0.177 # robot radius
+        self.c = 0.5      # robot clearance
         self.s = s
         self.thresh = self.c + self.r
         self.nodes_at_t = {}
@@ -62,42 +60,42 @@ class RRTStar:
         elif node.y + self.thresh > self.upper_lim_y:
             ret = True
 
-        if node.x > 40 - self.thresh and node.x < 60 + self.thresh and node.y > 35 - self.thresh and node.y < 65 + self.thresh:
+        if node.x > 4 - self.thresh and node.x < 6 + self.thresh and node.y > 3.5 - self.thresh and node.y < 6.5 + self.thresh:
             ret = True
 
-        time = -1
-        dist = -1
+        # time = -1
+        # dist = -1
         for traj in self.other_traj:
             t = node.t
             # print("timr: " + str(t))
             if node.t > len(traj[0])-1:
                 t = len(traj[0])-1
 
-            dist = np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2)
+            # dist = np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2)
 
             if np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2) < self.s:
-                print("Lower than safety distance")
-                print(np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2))
+                # print("Lower than safety distance")
+                # print(np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2))
                 ret = True
 
-            time = t
+            # time = t
 
 
-        xxx = [str(node.x), str(node.y), str(node.t), time, ret, dist]
-        np.savetxt(f1222, xxx, fmt="%s", newline=' ')
-        f1222.write("\n")
+        # xxx = [str(node.x), str(node.y), str(node.t), time, ret, dist]
+        # np.savetxt(f1222, xxx, fmt="%s", newline=' ')
+        # f1222.write("\n")
 
         return ret
 
     def goal_check(self, node):
-        if self.get_dist(node, self.goal_node) < 6:
+        if self.get_dist(node, self.goal_node) < 0.6:
             return True
 
         return False
 
     def get_random_node(self):
-        x = random.randint(1, 100)
-        y = random.randint(1, 100)
+        x = random.randint(1, 10)
+        y = random.randint(1, 10)
 
         new_node = self.node(x, y)
 
@@ -153,11 +151,10 @@ class RRTStar:
             y_path.append(y)
             count = count + 1
 
-        new_node = self.node(x, y, theta, t=parent.t+10)
+        new_node = self.node(x, y, t=parent.t+10)
         new_node.parent = parent
         new_node.x_path = x_path
         new_node.y_path = y_path
-        new_node.theta = [theta] * len(x_path)
         new_node.cost = parent.cost + dist
         return new_node
 
@@ -198,7 +195,7 @@ class RRTStar:
         dist = 0
 
         if max_count == 0:
-            return None, None, None
+            return None, None
 
         while(count < max_count): 
             dx = 0.1 * math.cos(theta) * self.vel
@@ -209,7 +206,7 @@ class RRTStar:
             dist = dist + np.sqrt(dx**2 + dy**2)
             
             if self.check_collision(self.node(x, y, t=t+count+1)):
-                return None, None, None
+                return None, None
 
             x_path.append(x)
             y_path.append(y)
@@ -220,7 +217,7 @@ class RRTStar:
         if y != child.y:
             child.y = y
 
-        return x_path, y_path, [theta] * len(x_path)
+        return x_path, y_path
 
     def get_neighbours(self, new_node):
         ngh_indx = []
@@ -236,20 +233,16 @@ class RRTStar:
         for i in ngh_indx:
             dist = self.get_dist(new_node, self.nodes[i])
             if self.nodes[i].cost + dist < new_node.cost:
-                x_path, y_path, theta_path = self.get_path(self.nodes[i], new_node)
+                x_path, y_path = self.get_path(self.nodes[i], new_node)
                 if x_path == None:
                     continue
                 new_node.t = self.nodes[i].t + len(x_path)
                 new_node.x_path = x_path
                 new_node.y_path = y_path
-                new_node.theta = theta_path[0]
-                new_node.theta_path = theta_path
                 new_node.cost = self.nodes[i].cost + dist
                 new_node.parent = self.nodes[i]
-                # self.propagate_cost_to_leaves(new_node)
 
     def deleteAllChildren(self, parent):
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         for idx, node in enumerate(self.nodes):
             if node.parent == parent:
                 del self.nodes[idx]
@@ -263,7 +256,6 @@ class RRTStar:
                 node.cost = parent.cost + dist
                 node.t = parent.t + len(node.x_path)
                 if self.check_collision(node):
-                    print("XXXXXXXXXXXXNeed to delete childrenXXXXXXXXXXXXXX")
                     del self.nodes[i]
                     self.deleteAllChildren(node)
                     i = i-1
@@ -277,14 +269,12 @@ class RRTStar:
         for i in ngh_indx:
             dist = self.get_dist(new_node, self.nodes[i])
             if new_node.cost + dist < self.nodes[i].cost:
-                x_path, y_path, theta_path = self.get_path(new_node, self.nodes[i])
+                x_path, y_path = self.get_path(new_node, self.nodes[i])
                 if x_path == None:
                     continue
                 self.nodes[i].t = new_node.t + len(x_path)
                 self.nodes[i].x_path = x_path
                 self.nodes[i].y_path = y_path
-                self.nodes[i].theta = theta_path[0]
-                self.nodes[i].theta_path = theta_path
                 self.nodes[i].cost = new_node.cost + dist
                 self.nodes[i].parent = new_node
                 self.propagate_cost_to_leaves(self.nodes[i])
@@ -295,32 +285,31 @@ class RRTStar:
 
     def backtrace(self, cur_node):
         if(cur_node.parent == None):
-            return np.asarray([cur_node.x]), np.asarray([cur_node.y]), np.asarray([cur_node.t]), np.asarray([cur_node.x]), np.asarray([cur_node.x]), np.asarray([])
+            return np.asarray([cur_node.x]), np.asarray([cur_node.y]), np.asarray([cur_node.t]), np.asarray([cur_node.x]), np.asarray([cur_node.x])
 
-        x, y, t, path_x, path_y, path_theta = self.backtrace(cur_node.parent)
+        x, y, t, path_x, path_y = self.backtrace(cur_node.parent)
 
         x_s = np.hstack((x, cur_node.x))
         y_s = np.hstack((y, cur_node.y))
         t_s = np.hstack((t, cur_node.t))
         path_x = np.hstack((path_x, cur_node.x_path))
         path_y = np.hstack((path_y, cur_node.y_path))
-        path_theta = np.hstack((path_theta, cur_node.theta_path))
 
-        print("path_x len: " + str(len(path_x)))
+        # print("path_x len: " + str(len(path_x)))
         # print("path_y len: " + str(len(path_y)))
-        print("time steps: " + str(t_s[len(t_s)-1]))
+        # print("time steps: " + str(t_s[len(t_s)-1]))
 
-        return x_s, y_s, t_s, path_x, path_y, path_theta
+        return x_s, y_s, t_s, path_x, path_y
 
-    def smooth_path(self, res, ax, name):
+    def smooth_path(self, res, ax, text_name, img_name):
         t = res.t
 
         # backtrace path 
-        x_s, y_s, t_s, path_x, path_y, path_theta = self.backtrace(res)
+        x_s, y_s, t_s, path_x, path_y = self.backtrace(res)
 
-        print("Time steps:" )
-        print(t_s)
-        print(len(path_x))
+        # print("Time steps:" )
+        # print(t_s)
+        # print(len(path_x))
         step = float(1/float(t))
         m = len(x_s)
 
@@ -331,17 +320,17 @@ class RRTStar:
         new_points = splev(u_s, tck)
         new_points = np.asarray(new_points)
 
-        if(len(self.other_traj) > 0):
-            print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            m = min(len(self.other_traj[0][0]), len(path_x))
-            for i in range(m-2):
-                dist = np.sqrt((self.other_traj[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
-                print(dist)
-                if dist < 10:
-                    print("Collision detected at: " + str(i))
-                    print("Coordinates: " + str(path_x[i]) + ", " + str(path_y[i]))
-                    col = True
-            print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        # if(len(self.other_traj) > 0):
+        #     print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        #     m = min(len(self.other_traj[0][0]), len(path_x))
+        #     for i in range(m-2):
+        #         dist = np.sqrt((self.other_traj[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
+        #         print(dist)
+        #         if dist < 1:
+        #             print("Collision detected at: " + str(i))
+        #             print("Coordinates: " + str(path_x[i]) + ", " + str(path_y[i]))
+        #             col = True
+        #     print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
 
             # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
             # for             
@@ -350,13 +339,13 @@ class RRTStar:
         ax.plot(x_s, y_s, color = 'r', linewidth = 1.5)
         ax.plot(new_points[0], new_points[1], label="S", color = 'c', linewidth = 1.5)
 
-        plt.savefig("explore.png")
+        plt.savefig(img_name)
 
         # save data in txt file
         out = new_points.T
-        if os.path.exists(name):
-            os.remove(name)
-        f1 = open(name, "a")
+        if os.path.exists(text_name):
+            os.remove(text_name)
+        f1 = open(text_name, "a")
 
         for i in range(len(out)):
             np.savetxt(f1, out[i], fmt="%s", newline=' ')
@@ -372,7 +361,7 @@ class RRTStar:
             if count == 0:
                 count += 1
                 continue
-            cir_node = plt.Circle((n.x, n.y), 0.2, fill=True, color = 'r')
+            cir_node = plt.Circle((n.x, n.y), 0.02, fill=True, color = 'r')
             ax.add_patch(cir_node)
             ax.plot(n.x_path, n.y_path, color = 'g', linewidth = 1)
 
@@ -380,7 +369,7 @@ class RRTStar:
             ax.plot(traj[0], traj[1], color = 'b', linewidth = 1)
 
 
-    def plan(self, name, replan = False):
+    def plan(self, text_name, img_name, replan = False):
         if self.check_collision(self.start_node):
             print("Start node inside obstacle")
             exit()
@@ -390,16 +379,16 @@ class RRTStar:
             exit()
 
         fig, ax = plt.subplots()
-        ax.set_xlim([0,100])
-        ax.set_ylim([0,100])
+        ax.set_xlim([0,10])
+        ax.set_ylim([0,10])
 
-        cir_start = plt.Circle((self.start_node.x, self.start_node.y), 1, fill=True, color = 'b')
-        cir_goal = plt.Circle((self.goal_node.x, self.goal_node.y), 1, fill=True, color = 'b')
+        cir_start = plt.Circle((self.start_node.x, self.start_node.y), 0.18, fill=True, color = 'm')
+        cir_goal = plt.Circle((self.goal_node.x, self.goal_node.y), 0.18, fill=True, color = 'b')
 
         ax.add_patch(cir_start)
         ax.add_patch(cir_goal)
 
-        obs = plt.Rectangle((40,35),20,30,fill=True, color='k')
+        obs = plt.Rectangle((4,3.5),2,3,fill=True, color='k')
         ax.add_patch(obs)
 
         if replan:
@@ -425,7 +414,7 @@ class RRTStar:
             index = len(self.nodes)-1
             self.add_to_nodes_dict(new_node, index)
 
-            cir_node = plt.Circle((new_node.x, new_node.y), 0.2, fill=True, color = 'r')
+            cir_node = plt.Circle((new_node.x, new_node.y), 0.02, fill=True, color = 'r')
             ax.add_patch(cir_node)
             ax.plot(new_node.x_path, new_node.y_path, color = 'g', linewidth = 1)
 
@@ -442,7 +431,7 @@ class RRTStar:
             # if count == 5:
             #     break
 
-        traj = self.smooth_path(new_node, ax, name)
+        traj = self.smooth_path(new_node, ax, text_name, img_name)
 
         return traj
 
@@ -458,11 +447,11 @@ class RRTStar:
         for idx in sorted(indx, reverse=True):
             del self.nodes[idx]
 
-    def replan(self, trajs, t):
+    def replan(self, trajs, t, text_name, img_name):
         self.other_traj = trajs
 
         self.prune(t)
-        traj = self.plan("replan.txt", replan = True)
+        traj = self.plan(text_name, img_name, replan = True)
 
         return traj
 
@@ -470,35 +459,35 @@ class RRTStar:
 
 def main():
     # starting position (x, y)
-    start1 = [35, 30]
-    start2 = [25, 30]
+    start1 = [3, 3]
+    start2 = [2.5, 3]
 
     # goal point (x, y)
-    goal1 = [30, 70]
-    goal2 = [30, 70]
+    goal1 = [2.5, 7]
+    goal2 = [3, 7]
 
     # safe distance
-    s = 3
+    s = 0.3
 
-    rrt_star1 = RRTStar(start1, goal1, s=3)
-    traj1 = rrt_star1.plan("out1.txt")
+    rrt_star1 = RRTStar(start1, goal1, s=s)
+    traj1 = rrt_star1.plan("plan1.txt", "explored1.png")
 
-    rrt_star2 = RRTStar(start2, goal2, s=3)
-    traj2 = rrt_star2.plan("out2.txt")
+    rrt_star2 = RRTStar(start2, goal2, s=s)
+    traj2 = rrt_star2.plan("plan2.txt", "explored2.png")
 
     fig, ax = plt.subplots()
-    ax.set_xlim([0,100])
-    ax.set_ylim([0,100])
+    ax.set_xlim([0,10])
+    ax.set_ylim([0,10])
     ax.plot(traj1[0], traj1[1], color = 'b', linewidth = 1)
     ax.plot(traj2[0], traj2[1], color = 'r', linewidth = 1)
-    plt.savefig("collision.png")
+    plt.savefig("Plan1.png")
 
     l = min(len(traj1[0]), len(traj2[0]))
     L = max(len(traj1[0]), len(traj2[0]))
     col = False
 
-    print(len(traj1[0]))
-    print(len(traj2[0]))
+    # print(len(traj1[0]))
+    # print(len(traj2[0]))
 
     for i in range(l):
         dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
@@ -509,10 +498,10 @@ def main():
             break
 
     if not col:
+        flag = False
+        if len(traj1[0]) == l:
+            flag = True
         for i in range(l, L):
-            flag = False
-            if len(traj1[0]) == l:
-                flag = True
             if flag:
                 dist = np.sqrt((traj1[0][l-1]-traj2[0][i])**2 + (traj1[1][l-1]-traj2[1][i])**2)
             else:
@@ -524,10 +513,8 @@ def main():
                 break
 
     if col:
-        new_traj1 = rrt_star1.replan([traj2], i)
-        new_traj2 = rrt_star2.replan([traj1], i)
-
-        # print(new_traj1)
+        new_traj1 = rrt_star1.replan([traj2], i, "replanned1.txt", "re_explored1.png")
+        new_traj2 = rrt_star2.replan([traj1], i, "replanned2.txt", "re_explored2.png")
 
         pd1 = float(len(new_traj1)-len(traj1)/float(len(traj1)))*100
         pd2 = float(len(new_traj2)-len(traj2)/float(len(traj2)))*100
@@ -538,26 +525,25 @@ def main():
             print("Trajectory 2 changed")
             traj2 = new_traj2
 
-    fig2, ax2 = plt.subplots()
-    ax2.set_xlim([0,100])
-    ax2.set_ylim([0,100])
-    
-    L1 = len(traj1[0])
-    L2 = len(traj2[0])
-    L = max(L1, L2)
-    cm = plt.get_cmap('plasma')
-    ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L1-1)])
-    for i in range(L1-1):
-        ax2.plot(traj1[0][i:i+2], traj1[1][i:i+2])
-    
-    cm = plt.get_cmap('plasma')
-    ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L2-1)])
-    for i in range(L2-1):
-        ax2.plot(traj2[0][i:i+2], traj2[1][i:i+2])
+        fig2, ax2 = plt.subplots()
+        ax2.set_xlim([0,10])
+        ax2.set_ylim([0,10])
+        
+        L1 = len(traj1[0])
+        L2 = len(traj2[0])
+        L = max(L1, L2)
+        cm = plt.get_cmap('plasma')
+        ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L1-1)])
+        for i in range(L1-1):
+            ax2.plot(traj1[0][i:i+2], traj1[1][i:i+2])
+        
+        cm = plt.get_cmap('plasma')
+        ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L2-1)])
+        for i in range(L2-1):
+            ax2.plot(traj2[0][i:i+2], traj2[1][i:i+2])
 
-    if col:
-        print("New trajectory 1 length: " + str(traj1.shape))
-        print("New trajectory 2 length: " + str(traj2.shape))
+        # print("New trajectory 1 length: " + str(traj1.shape))
+        # print("New trajectory 2 length: " + str(traj2.shape))
         l2 = min(len(traj1[0]), len(traj2[0]))
         for i in range(l2):
             dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
@@ -565,7 +551,25 @@ def main():
             if dist < s:
                 print("Collision detected at: " + str(i))
                 print(dist)
-                col = True
+
+    # save data in txt file
+    out1 = traj1.T
+    if os.path.exists("final_path1.txt"):
+        os.remove("final_path1.txt")
+    final1 = open("final_path1.txt", "a")
+
+    for i in range(len(out1)):
+        np.savetxt(final1, out1[i], fmt="%s", newline=' ')
+        final1.write("\n")
+
+    out2 = traj2.T
+    if os.path.exists("final_path2.txt"):
+        os.remove("final_path2.txt")
+    final2 = open("final_path2.txt", "a")
+
+    for i in range(len(out2)):
+        np.savetxt(final2, out2[i], fmt="%s", newline=' ')
+        final2.write("\n")
 
     plt.savefig("final_path.png")
 

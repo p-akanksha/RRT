@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="use_sim_time" value="true"/>
+    <arg name="world_name" value="$(find multi_turtle)/world/project.world"/>
+  </include>
+	
+
+  <arg name="XA" default="3.0"/>
+  <arg name="YA" default="3.0"/>
+  <arg name="TA" default="0.0"/>
+  <arg name="XB" default="0.9"/>
+  <arg name="YB" default="3.0"/>
+  <arg name="TB" default="0.0"/>
+  <arg name="XC" default="1.4"/>
+  <arg name="YC" default="1.9"/>
+  <arg name="TC" default="0.0"/>
+  <arg name="base" value="$(optenv TURTLEBOT_BASE kobuki)"/>
+  <arg name="stacks" value="$(optenv TURTLEBOT_STACKS hexagons)"/> 
+  <arg name="3d_sensor" value="$(optenv TURTLEBOT_3D_SENSOR kinect)"/>
+ 
+  <group ns="/changu">
+    <include file="$(find multi_turtle)/launch/includes/Turtlebot_Kinect.launch.xml">
+      <arg name="init_pose" value="-x $(arg XA) -y $(arg YA) -z 0.0 -R 0.0 -P 0.0 -Y $(arg TA)"/>
+      <arg name="base" value="$(arg base)"/>
+      <arg name="stacks" value="$(arg stacks)"/>
+      <arg name="3d_sensor" value="$(arg 3d_sensor)"/>
+      <arg name="name" value="/changu"/>
+      <!-- <arg name="namespace" value="changu"/> -->
+    </include>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+      <param name="publish_frequency" type="double" value="30.0"/>
+    </node>
+  </group>
+
+  <group ns="/mangu">
+    <include file="$(find multi_turtle)/launch/includes/Turtlebot_Kinect.launch.xml">
+      <arg name="init_pose" value="-x $(arg XB) -y $(arg YB) -z 0.0 -R 0.0 -P 0.0 -Y $(arg TB)"/>
+      <arg name="base" value="$(arg base)"/>
+      <arg name="stacks" value="$(arg stacks)"/>
+      <arg name="3d_sensor" value="$(arg 3d_sensor)"/>
+      <arg name="name" value="/mangu"/>
+      <!-- <arg name="namespace" value="mangu"/> -->
+    </include>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+      <param name="publish_frequency" type="double" value="30.0"/>
+    </node>
+  </group>
+
+  <group ns="/meenu">
+    <include file="$(find multi_turtle)/launch/includes/Turtlebot_Kinect.launch.xml">
+      <arg name="init_pose" value="-x $(arg XC) -y $(arg YC) -z 0.0 -R 0.0 -P 0.0 -Y $(arg TC)"/>
+      <arg name="base" value="$(arg base)"/>
+      <arg name="stacks" value="$(arg stacks)"/>
+      <arg name="3d_sensor" value="$(arg 3d_sensor)"/>
+      <arg name="name" value="/meenu"/>
+      <!-- <arg name="namespace" value="mangu"/> -->
+    </include>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher">
+      <param name="publish_frequency" type="double" value="30.0"/>
+    </node>
+  </group>
+
+  <node
+    pkg="multi_turtle"
+    type="turtle_move.py"
+    name="turtle_move"
+    output="screen"
+   />
+
+  <node
+    pkg="multi_turtle"
+    type="mangu_move.py"
+    name="mangu_move"
+    output="screen"
+   />
+
+  <node
+    pkg="multi_turtle"
+    type="meenu_move.py"
+    name="meenu_move"
+    output="screen"
+   />
+</launch>

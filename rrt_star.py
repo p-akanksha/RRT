@@ -309,7 +309,7 @@ class RRTStar:
         # print("Time steps:" )
         # print(t_s)
         # print(len(path_x))
-        step = float(1/float(t))
+        step = 5*float(1/float(t))
         m = len(x_s)
 
         # Path smoothing

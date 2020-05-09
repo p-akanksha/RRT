@@ -497,6 +497,9 @@ def main():
     goal2 = [3, 7]
     goal3 = [7, 8]
 
+    if not os.path.exists('Output'):
+		os.makedirs('Output')
+
     # safe distance
     s = 0.5
 

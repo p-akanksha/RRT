@@ -1,5 +1,4 @@
 import os
-import cv2
 import math
 import random
 import numpy as np
@@ -8,10 +7,6 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev, splrep
 
 plt.ion()
-
-# if os.path.exists("checked_nodes.txt"):
-#     os.remove("checked_nodes.txt")
-# f1222 = open("checked_nodes.txt", "a")
 
 class RRTStar:
     class node:
@@ -63,26 +58,13 @@ class RRTStar:
         if node.x > 4 - self.thresh and node.x < 6 + self.thresh and node.y > 3.5 - self.thresh and node.y < 6.5 + self.thresh:
             ret = True
 
-        # time = -1
-        # dist = -1
         for traj in self.other_traj:
             t = node.t
-            # print("timr: " + str(t))
             if node.t > len(traj[0])-1:
                 t = len(traj[0])-1
 
-            # dist = np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2)
-
             if np.sqrt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2) < self.s:
-                # print("Lowergitt((node.x - traj[0][t])**2 + (node.y - traj[1][t])**2))
                 ret = True
-
-            # time = t
-
-
-        # xxx = [str(node.x), str(node.y), str(node.t), time, ret, dist]
-        # np.savetxt(f1222, xxx, fmt="%s", newline=' ')
-        # f1222.write("\n")
 
         return ret
 
@@ -97,9 +79,6 @@ class RRTStar:
         y = random.randint(1, 10)
 
         new_node = self.node(x, y)
-
-        if self.check_collision(new_node):
-            return None
 
         return new_node
 
@@ -306,9 +285,6 @@ class RRTStar:
         # backtrace path 
         x_s, y_s, t_s, path_x, path_y = self.backtrace(res)
 
-        # print("Time steps:" )
-        # print(t_s)
-        # print(len(path_x))
         step = 5*float(1/float(t))
         m = len(x_s)
 
@@ -318,21 +294,6 @@ class RRTStar:
         u_s = np.arange(0, 1.01, step)
         new_points = splev(u_s, tck)
         new_points = np.asarray(new_points)
-
-        # if(len(self.other_traj) > 0):
-        #     print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-        #     m = min(len(self.other_traj[0][0]), len(path_x))
-        #     for i in range(m-2):
-        #         dist = np.sqrt((self.other_traj[0][0][i]-path_x[i])**2 + (self.other_traj[0][1][i]-path_y[i])**2)
-        #         print(dist)
-        #         if dist < 1:
-        #             print("Collision detected at: " + str(i))
-        #             print("Coordinates: " + str(path_x[i]) + ", " + str(path_y[i]))
-        #             col = True
-        #     print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-
-            # print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            # for             
 
         # Plot both trajectories
         ax.plot(x_s, y_s, color = 'r', linewidth = 1.5)
@@ -349,8 +310,6 @@ class RRTStar:
         for i in range(len(out)):
             np.savetxt(f1, out[i], fmt="%s", newline=' ')
             f1.write("\n")
-
-        # new_points = np.hstack((np.reshape(path_x, (len(path_x),1)), np.reshape(path_y, (len(path_y),1)))).T
 
         return new_points
 
@@ -427,8 +386,6 @@ class RRTStar:
                 break
 
             count = count + 1
-            # if count == 5:
-            #     break
 
         traj = self.smooth_path(new_node, ax, text_name, img_name)
 
@@ -464,8 +421,9 @@ def check_for_replanning_util(traj1, traj2, s):
     for i in range(l):
         dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
         # print(dist)
-        if dist < s:
+        if dist < (s):
             print("Collision detected at: " + str(i))
+            # print(dist)
             col = True
             break
 
@@ -479,16 +437,19 @@ def check_for_replanning_util(traj1, traj2, s):
                 dist = np.sqrt((traj1[0][l-1]-traj2[0][i])**2 + (traj1[1][l-1]-traj2[1][i])**2)
             else:
                 dist = np.sqrt((traj1[0][i]-traj2[0][l-1])**2 + (traj1[1][i]-traj2[1][l-1])**2)
-            # print(dist)
             if dist < s:
                 print("Collision detected at: " + str(i))
+                # print(dist)
                 col = True
                 step = i
                 break
 
     return col, step
 
-def check_for_replanning(traj1, traj2, traj3, s):
+def check_for_replanning(traj1, traj2, traj3, s, flag):
+    if not flag:
+        s = s - 0.1
+
     col12, t12 = check_for_replanning_util(traj1, traj2, s)
     col23, t23 = check_for_replanning_util(traj2, traj3, s)
     col31, t31 = check_for_replanning_util(traj1, traj3, s)
@@ -537,17 +498,17 @@ def main():
     goal3 = [7, 8]
 
     # safe distance
-    s = 0.7
+    s = 0.5
 
     # Initial Planning
     rrt_star1 = RRTStar(start1, goal1, s=s)
-    traj1 = rrt_star1.plan("plan1.txt", "explored1.png")
+    traj1 = rrt_star1.plan("Output/plan1.txt", "Output/explored1.png")
 
     rrt_star2 = RRTStar(start2, goal2, s=s)
-    traj2 = rrt_star2.plan("plan2.txt", "explored2.png")
+    traj2 = rrt_star2.plan("Output/plan2.txt", "Output/explored2.png")
 
     rrt_star3 = RRTStar(start3, goal3, s=s)
-    traj3 = rrt_star3.plan("plan1.txt", "explored1.png")
+    traj3 = rrt_star3.plan("Output/plan3.txt", "Output/explored3.png")
 
     # Plot planned trajectories
     fig, ax = plt.subplots()
@@ -556,7 +517,7 @@ def main():
     ax.plot(traj1[0], traj1[1], color = 'b', linewidth = 1)
     ax.plot(traj2[0], traj2[1], color = 'r', linewidth = 1)
     ax.plot(traj3[0], traj3[1], color = 'g', linewidth = 1)
-    plt.savefig("Plan1.png")
+    plt.savefig("Output/Plan0.png")
 
     replan = [True, True, True]
     traj_all = [traj1, traj2, traj3]
@@ -565,8 +526,11 @@ def main():
     # replan2 = True
     # replan3 = True
 
-    for i in range(3):
-        col, t = check_for_replanning(traj1, traj2, traj3, s)
+    flag = True
+
+    for i in range(2):
+        col, t = check_for_replanning(traj1, traj2, traj3, s, flag)
+        flag = False
         print("Collision: ", col)
 
         pd1 = float('inf')
@@ -574,16 +538,16 @@ def main():
         pd3 = float('inf')
 
         if col[0] and replan[0]:
-            new_traj1 = rrt_star1.replan([traj2, traj3], t[0], "replanned1.txt", "re_explored1.png")
-            pd1 = float(len(new_traj1)-len(traj1)/float(len(traj1)))*100
+            new_traj1 = rrt_star1.replan([traj2, traj3], t[0], "Output/replanned"+str(i)+"_1.txt", "Output/re_explored"+str(i)+"_1.png")
+            pd1 = (len(new_traj1[0])-len(traj1[0]))/float(len(traj1[0]))*100
 
         if col[1] and replan[1]:
-            new_traj2 = rrt_star2.replan([traj1, traj3], t[1], "replanned2.txt", "re_explored2.png")
-            pd2 = float(len(new_traj2)-len(traj2)/float(len(traj2)))*100
+            new_traj2 = rrt_star2.replan([traj1, traj3], t[1], "Output/replanned"+str(i)+"_2.txt", "Output/re_explored"+str(i)+"_2.png")
+            pd2 = (len(new_traj2[0])-len(traj2[0]))/float(len(traj2[0]))*100
 
         if col[2] and replan[2]:
-            new_traj3 = rrt_star3.replan([traj1, traj2], t[2], "replanned3.txt", "re_explored3.png")
-            pd3 = float(len(new_traj3)-len(traj3)/float(len(traj3)))*100
+            new_traj3 = rrt_star3.replan([traj1, traj2], t[2], "Output/replanned"+str(i)+"_3.txt", "Output/re_explored"+str(i)+"_3.png")
+            pd3 = (len(new_traj3[0])-len(traj3[0]))/float(len(traj3[0]))*100
 
         m = min(pd1, pd2, pd3)
 
@@ -606,48 +570,13 @@ def main():
             traj3 = new_traj3
             replan[2] = False
 
-
-
-
-    # l = min(len(traj1[0]), len(traj2[0]))
-    # L = max(len(traj1[0]), len(traj2[0]))
-    # col = False
-
-    # for i in range(l):
-    #     dist = np.sqrt((traj1[0][i]-traj2[0][i])**2 + (traj1[1][i]-traj2[1][i])**2)
-    #     # print(dist)
-    #     if dist < s:
-    #         print("Collision detected at: " + str(i))
-    #         col = True
-    #         break
-
-    # if not col:
-    #     flag = False
-    #     if len(traj1[0]) == l:
-    #         flag = True
-    #     for i in range(l, L):
-    #         if flag:
-    #             dist = np.sqrt((traj1[0][l-1]-traj2[0][i])**2 + (traj1[1][l-1]-traj2[1][i])**2)
-    #         else:
-    #             dist = np.sqrt((traj1[0][i]-traj2[0][l-1])**2 + (traj1[1][i]-traj2[1][l-1])**2)
-    #         # print(dist)
-    #         if dist < s:
-    #             print("Collision detected at: " + str(i))
-    #             col = True
-    #             break
-
-    # if col:
-    #     new_traj1 = rrt_star1.replan([traj2], i, "replanned1.txt", "re_explored1.png")
-    #     new_traj2 = rrt_star2.replan([traj1], i, "replanned2.txt", "re_explored2.png")
-
-    #     pd1 = float(len(new_traj1)-len(traj1)/float(len(traj1)))*100
-    #     pd2 = float(len(new_traj2)-len(traj2)/float(len(traj2)))*100
-
-    #     if pd1 < pd2:
-    #         print("Trajectory 1 changed")
-    #     else:
-    #         print("Trajectory 2 changed")
-    #         traj2 = new_traj2
+        fig6, ax6 = plt.subplots()
+        ax6.set_xlim([0,10])
+        ax6.set_ylim([0,10])
+        ax6.plot(traj1[0], traj1[1], color = 'b', linewidth = 1)
+        ax6.plot(traj2[0], traj2[1], color = 'r', linewidth = 1)
+        ax6.plot(traj3[0], traj3[1], color = 'g', linewidth = 1)
+        plt.savefig("Output/Plan"+str(i+1)+".png")
 
     fig2, ax2 = plt.subplots()
     ax2.set_xlim([0,10])
@@ -661,64 +590,62 @@ def main():
     L3 = len(traj3[0])
     L = max(L1, L2, L3)
     cm = plt.get_cmap('plasma')
-    ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L-1)])
+    ax2.set_color_cycle([cm(1.*i/(L)) for i in range(L)])
     for i in range(L1-1):
         ax2.plot(traj1[0][i:i+2], traj1[1][i:i+2])
     
-    # cm = plt.get_cmap('plasma')
-    # ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L2-1)])
+    cm = plt.get_cmap('plasma')
+    ax2.set_color_cycle([cm(1.*i/(L)) for i in range(L)])
     for i in range(L2-1):
         ax2.plot(traj2[0][i:i+2], traj2[1][i:i+2])
 
-    # cm = plt.get_cmap('plasma')
-    # ax2.set_color_cycle([cm(1.*i/(L-1)) for i in range(L2-1)])
+    cm = plt.get_cmap('plasma')
+    ax2.set_color_cycle([cm(1.*i/(L)) for i in range(L)])
     for i in range(L3-1):
         ax2.plot(traj3[0][i:i+2], traj3[1][i:i+2])
 
-    # print("New trajectory 1 length: " + str(traj1.shape))
-    # print("New trajectory 2 length: " + str(traj2.shape))
     tr = [traj1, traj2, traj3]
 
-    for i in range(3):
-        print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-        print("For iteration: " + str(i+3))
-        l2 = min(len(tr[i][0]), len(tr[(i+1)%3][0]))
-        for j in range(l2):
-            dist = np.sqrt((tr[i][0][j]-tr[(i+1)%3][0][j])**2 + (tr[i][1][j]-tr[(i+1)%3][1][j])**2)
-            # print(dist)
-            if dist < s:
-                print("Collision detected at: " + str(i))
-                print(dist)
+    # for i in range(3):
+    #     print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+    #     print("For iteration: " + str(i+3))
+    #     l2 = min(len(tr[i][0]), len(tr[(i+1)%3][0]))
+    #     for j in range(l2):
+    #         dist = np.sqrt((tr[i][0][j]-tr[(i+1)%3][0][j])**2 + (tr[i][1][j]-tr[(i+1)%3][1][j])**2)
+    #         # print(dist)
+    #         if dist < s:
+    #             print("Collision detected at: " + str(i))
+    #             print(dist)
 
     # save data in txt file
     out1 = traj1.T
-    if os.path.exists("final_path1.txt"):
-        os.remove("final_path1.txt")
-    final1 = open("final_path1.txt", "a")
+    if os.path.exists("Output/final_path1.txt"):
+        os.remove("Output/final_path1.txt")
+    final1 = open("Output/final_path1.txt", "a")
 
     for i in range(len(out1)):
         np.savetxt(final1, out1[i], fmt="%s", newline=' ')
         final1.write("\n")
 
     out2 = traj2.T
-    if os.path.exists("final_path2.txt"):
-        os.remove("final_path2.txt")
-    final2 = open("final_path2.txt", "a")
+    if os.path.exists("Output/final_path2.txt"):
+        os.remove("Output/final_path2.txt")
+    final2 = open("Output/final_path2.txt", "a")
 
     for i in range(len(out2)):
         np.savetxt(final2, out2[i], fmt="%s", newline=' ')
         final2.write("\n")
 
     out3 = traj3.T
-    if os.path.exists("final_path3.txt"):
-        os.remove("final_path3.txt")
-    final3 = open("final_path3.txt", "a")
+    if os.path.exists("Output/final_path3.txt"):
+        os.remove("Output/final_path3.txt")
+    final3 = open("Output/final_path3.txt", "a")
 
     for i in range(len(out3)):
         np.savetxt(final3, out3[i], fmt="%s", newline=' ')
         final3.write("\n")
 
-    plt.savefig("final_path.png")
+    plt.savefig("Output/final_path.png")
 
     plt.show()
     plt.pause(15)
